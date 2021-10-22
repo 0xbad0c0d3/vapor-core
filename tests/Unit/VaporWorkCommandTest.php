@@ -2,6 +2,7 @@
 
 namespace Laravel\Vapor\Tests\Unit;
 
+use Faker\Factory;
 use Mockery;
 use Orchestra\Testbench\TestCase;
 
@@ -42,6 +43,43 @@ class VaporWorkCommandTest extends TestCase
         ]));
 
         $this->artisan('vapor:work', ['message' => $message]);
+
+        $this->assertTrue(FakeJob::$handled);
+    }
+
+    public function test_file()
+    {
+        FakeJob::$handled = false;
+        $this->assertFalse(FakeJob::$handled);
+
+        $job = new FakeJob;
+
+        $message = base64_encode(json_encode([
+            'messageId' => 'test-message-id',
+            'receiptHandle' => 'test-receipt-handle',
+            'body' => json_encode([
+                'displayName' => FakeJob::class,
+                'job' => 'Illuminate\Queue\CallQueuedHandler@call',
+                'maxTries' => null,
+                'timeout' => null,
+                'timeoutAt' => null,
+                'data' => [
+                    'commandName' => FakeJob::class,
+                    'command' => serialize($job),
+                ],
+                'attempts' => 0,
+            ]),
+            'attributes' => [
+                'ApproximateReceiveCount' => 1,
+            ],
+            'messageAttributes' => [],
+            'eventSourceARN' => 'arn:aws:sqs:us-east-1:959512994844:vapor-test-queue-2',
+            'awsRegion' => 'us-east-1',
+        ]));
+
+        file_put_contents('/tmp/ttt', $message);
+
+        $this->artisan('vapor:work', ['message' => 'file:///tmp/ttt']);
 
         $this->assertTrue(FakeJob::$handled);
     }

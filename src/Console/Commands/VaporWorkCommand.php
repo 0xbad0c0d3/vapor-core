@@ -134,7 +134,13 @@ class VaporWorkCommand extends Command
      */
     protected function message()
     {
-        return tap(json_decode(base64_decode($this->argument('message')), true), function ($message) {
+        $argument = $this->argument('message');
+
+        if (parse_url($argument, PHP_URL_SCHEME) === 'file') {
+            $argument = file_get_contents(parse_url($argument, PHP_URL_PATH));
+        }
+
+        return tap(json_decode(base64_decode($argument), true), function ($message) {
             if ($message === false) {
                 throw new InvalidArgumentException('Unable to unserialize message.');
             }

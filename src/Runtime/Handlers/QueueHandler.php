@@ -52,13 +52,25 @@ class QueueHandler implements LambdaEventHandler
 
             $consoleKernel = static::$app->make(Kernel::class);
 
+            $payload = rtrim(base64_encode(json_encode($event['Records'][0])), '=');
+            $hash = hash('sha256', $payload);
+            if (strlen($payload) > 131000) {
+                $tmpFile = '/tmp/' . $hash;
+                file_put_contents($tmpFile, $payload);
+                $payload = 'file://'.$tmpFile;
+            }
             $consoleInput = new StringInput(
-                'vapor:work '.rtrim(base64_encode(json_encode($event['Records'][0])), '=').' '.$commandOptions.' --no-interaction'
+                'vapor:work '. $payload .' '.$commandOptions.' --no-interaction'
             );
-
-            $consoleKernel->terminate($consoleInput, $status = $consoleKernel->handle(
-                $consoleInput, $output = new BufferedOutput
-            ));
+            try {
+                $consoleKernel->terminate($consoleInput, $status = $consoleKernel->handle(
+                    $consoleInput, $output = new BufferedOutput
+                ));
+            } finally {
+                if ($tmpFile ?? null) {
+                    unlink($tmpFile);
+                }
+            }
 
             return new ArrayLambdaResponse([
                 'requestId' => $_ENV['AWS_REQUEST_ID'] ?? null,
