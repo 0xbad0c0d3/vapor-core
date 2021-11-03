@@ -6,7 +6,7 @@ use Illuminate\Contracts\Console\Kernel;
 use Laravel\Vapor\Contracts\LambdaEventHandler;
 use Laravel\Vapor\Runtime\ArrayLambdaResponse;
 use Laravel\Vapor\Runtime\StorageDirectories;
-use Symfony\Component\Console\Input\StringInput;
+use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
 
 class QueueHandler implements LambdaEventHandler
@@ -39,21 +39,24 @@ class QueueHandler implements LambdaEventHandler
      */
     public function handle(array $event)
     {
-        $commandOptions = trim(sprintf(
-            '--delay=%s --tries=%s %s',
-            $_ENV['SQS_DELAY'] ?? 3,
-            $_ENV['SQS_TRIES'] ?? 3,
-            ($_ENV['SQS_FORCE'] ?? false) ? '--force' : ''
-        ));
+        $parameters = [
+            'vapor:work',
+            'message' => base64_encode(json_encode($event['Records'][0])),
+            '--delay' => ($_ENV['SQS_DELAY'] ?? 3),
+            '--tries' => ($_ENV['SQS_TRIES'] ?? 3),
+            '--no-interaction'
+        ];
+
+        if (($_ENV['SQS_FORCE'] ?? false)) {
+            $parameters[] = '--force';
+        }
+
+        $consoleInput = new ArrayInput($parameters);
 
         try {
             static::$app->useStoragePath(StorageDirectories::PATH);
 
             $consoleKernel = static::$app->make(Kernel::class);
-
-            $consoleInput = new StringInput(
-                'vapor:work '.base64_encode(json_encode($event['Records'][0])).' '.$commandOptions.' --no-interaction'
-            );
 
             $consoleKernel->terminate($consoleInput, $status = $consoleKernel->handle(
                 $consoleInput, $output = new BufferedOutput
